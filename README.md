@@ -4,7 +4,7 @@ Kubernetes Camp Advanced München 14.-16.9.2021
 
 https://zwerk.org/hedgedoc/k8s202109#
 
-Beispieldateien aus github.org/erkules/k8sworkshop, teilweise hier reinkopiert.
+Beispieldateien aus github.com/erkules/k8sworkshop, teilweise hier reinkopiert.
 
 # Pod Priority
 
@@ -121,16 +121,16 @@ allepodsimNamespaceOutgoing2.yaml: DNS-Traffic ist nur nach draußen erlaubt.
 Capabilities - Vergleich mit Docker
 
 ```
-root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ grep CapEff /proc/self/status
+root@christoph0 ~/Git/k8scamp (master)$ grep CapEff /proc/self/status
 CapEff: 0000003fffffffff
-root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ capsh --decode=0000003fffffffff  | tr , "\n"
+root@christoph0 ~/Git/k8scamp (master)$ capsh --decode=0000003fffffffff  | tr , "\n"
 0x0000003fffffffff=cap_chown
 cap_dac_override
 cap_dac_read_search
 cap_fowner
 cap_fsetid
 (...)
-root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ docker container run -ti alpine
+root@christoph0 ~/Git/k8scamp (master)$ docker container run -ti alpine
 / # grep CapEff /proc/self/status
 CapEff: 00000000a80425fb
 / # ls -l /proc/self/ns
@@ -144,7 +144,7 @@ lrwxrwxrwx    1 root     root             0 Sep 14 12:36 pid_for_children -> pid
 lrwxrwxrwx    1 root     root             0 Sep 14 12:36 user -> user:[4026531837]
 lrwxrwxrwx    1 root     root             0 Sep 14 12:36 uts -> uts:[4026532537]
 / # exit
-root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ ls -l /proc/self/ns
+root@christoph0 ~/Git/k8scamp (master)$ ls -l /proc/self/ns
 total 0
 lrwxrwxrwx 1 root root 0 Sep 14 14:36 cgroup -> 'cgroup:[4026531835]'
 lrwxrwxrwx 1 root root 0 Sep 14 14:36 ipc -> 'ipc:[4026531839]'
@@ -160,7 +160,12 @@ Docker-Container haben weniger Privilegien als der Host, außer sie laufen "priv
 
 Wir möchten verhindern, dass ein kompromittierter Container Unfug auf dem Host-System anstellt.
 
+Pod Security Policies sind "deprecated".
+Verwende stattdessen OPA Gatekeeper, Kyverno (einfacher als OPA), ...
+
 # Kyverno
+
+Wir möchten eine Policy bauen, die das Anlegen von NodePort-Services verhindert.
 
 ```
 root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl apply -f check_nodeport.yaml
@@ -198,4 +203,47 @@ check-node-port:
     failed at path /spec/type/'
 ```
 
-Man kann die Policy auch als Cluster-Policy anlegen, dann hat man aber Seiteneffekte (einige Sachen gehen nicht mehr).
+Man kann die Policy auch als ClusterPolicy anlegen, dann hat man aber Seiteneffekte (einige Sachen gehen nicht mehr).
+Wenn ClusterPolicy, dann besser Namespaces einschränken (Verwendung von Wildcards). Vorsicht bei ClusterPolicies
+auf kube-system!
+
+Validierung: Pod muss ein Label haben.
+
+```
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl create namespace test
+namespace/test created
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl apply -f policy_validate_pod_label.yaml -n test
+policy.kyverno.io/validate-pod-label-app created
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl get policy -n test
+NAME                     BACKGROUND   ACTION
+validate-pod-label-app   true         enforce
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ cp ~/Git/k8sworkshop/Pods/pod.yaml .
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl apply -f pod.yaml
+Error from server: error when creating "pod.yaml": admission webhook "validate.kyverno.svc" denied the request:
+
+resource Pod/test/www was blocked due to the following policies
+
+validate-pod-label-app:
+  validate-pod-label-app: 'validation error: Pod muss ein app Label haben!. Rule validate-pod-label-app
+    failed at path /metadata/labels/'
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ vi pod.yaml
+(pod.yaml fixen: Label hinzufügen)
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ k apply -f pod.yaml
+pod/www created
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ k get pods -n test
+NAME   READY   STATUS    RESTARTS   AGE
+www    1/1     Running   0          7s
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ k get pods -n test --show-labels
+NAME   READY   STATUS    RESTARTS   AGE   LABELS
+www    1/1     Running   0          14s   app=nginxhostname
+```
+
+podpriorityComplex.yaml: am Anfang wird eine ConfigMap definiert (key-value), auf die nachfolgend zugegriffen wird - Pod Priorities
+für namespaces foo und bar. Deployments, DaemonSets haben Templates, wie Pods definiert werden. Schon beim Erstellen von
+Deployments etc. werden Fehler ausgegeben.
+
+Slide 19/23: einfaches Beispiel, wie man bei Angabe von "latest" immer das latest-Image pullen lassen kann (wird z.B. von docker[-compose]
+nicht gemacht).
+
+Weitere Beispiele zeigen: man kann mit Kyverno eine Menge machen, was man auch mit ArgoCD oder Flux machen könnte.
+Man sollte Scopes festlegen, wer macht was, wenn man alles im Einsatz hat, sonst schwer zu debuggen!
