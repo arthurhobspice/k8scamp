@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tored
+  namespace: netz
+spec:
+  podSelector:
+    matchLabels:
+      pods: rot
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          pods: blau
+    ports: 
+    - port: 80
