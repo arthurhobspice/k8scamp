@@ -4,6 +4,8 @@ Kubernetes Camp Advanced München 14.-16.9.2021
 
 https://zwerk.org/hedgedoc/k8s202109#
 
+Beispieldateien aus github.org/erkules/k8sworkshop, teilweise hier reinkopiert.
+
 # Pod Priority
 
 Wichtigere Pods haben eine höhere Nummer. Die absolute Höhe ist egal, es geht nur ums Verhältnis.
@@ -113,3 +115,87 @@ root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ k explain networkpolicie
 allepodsimNamespaceOutgoing.yaml: DNS-Traffic ausgehend überall hin erlaubt, ansonsten nur Traffic nach draußen.
 allepodsimNamespaceOutgoing2.yaml: DNS-Traffic ist nur nach draußen erlaubt.
 (Jeder Arrayeintrag ist ein Satz von Regeln.)
+
+# Pod Security Policy
+
+Capabilities - Vergleich mit Docker
+
+```
+root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ grep CapEff /proc/self/status
+CapEff: 0000003fffffffff
+root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ capsh --decode=0000003fffffffff  | tr , "\n"
+0x0000003fffffffff=cap_chown
+cap_dac_override
+cap_dac_read_search
+cap_fowner
+cap_fsetid
+(...)
+root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ docker container run -ti alpine
+/ # grep CapEff /proc/self/status
+CapEff: 00000000a80425fb
+/ # ls -l /proc/self/ns
+total 0
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 cgroup -> cgroup:[4026531835]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 ipc -> ipc:[4026532538]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 mnt -> mnt:[4026532536]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 net -> net:[4026532541]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 pid -> pid:[4026532539]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 pid_for_children -> pid:[4026532539]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 user -> user:[4026531837]
+lrwxrwxrwx    1 root     root             0 Sep 14 12:36 uts -> uts:[4026532537]
+/ # exit
+root@christoph0 ~/Git/k8scamp/NetworkPolicies (master)$ ls -l /proc/self/ns
+total 0
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 cgroup -> 'cgroup:[4026531835]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 ipc -> 'ipc:[4026531839]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 mnt -> 'mnt:[4026531840]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 net -> 'net:[4026531992]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 pid -> 'pid:[4026531836]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 pid_for_children -> 'pid:[4026531836]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 user -> 'user:[4026531837]'
+lrwxrwxrwx 1 root root 0 Sep 14 14:36 uts -> 'uts:[4026531838]'
+```
+
+Docker-Container haben weniger Privilegien als der Host, außer sie laufen "privileged". Andere Namespaces.
+
+Wir möchten verhindern, dass ein kompromittierter Container Unfug auf dem Host-System anstellt.
+
+# Kyverno
+
+```
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl apply -f check_nodeport.yaml
+policy.kyverno.io/check-node-port created
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl get policy
+NAME              BACKGROUND   ACTION
+check-node-port   true         enforce
+```
+
+Deployment und Service nginx erzeugen:
+
+```
+root@christoph0 ~/Git/k8scamp/nginx (master)$ kubectl apply -f nginx.yaml
+deployment.apps/nginx-deployment created
+root@christoph0 ~/Git/k8scamp/nginx (master)$ kubectl get pods -n nginx
+NAME                                READY   STATUS    RESTARTS   AGE
+nginx-deployment-66b6c48dd5-fskpx   1/1     Running   0          14s
+nginx-deployment-66b6c48dd5-krz6s   1/1     Running   0          14s
+```
+
+Policies sind "namespaced resources" => Namespace mit angeben:
+
+```
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ kubectl apply -f check_nodeport.yaml -n nginx
+policy.kyverno.io/check-node-port created
+root@christoph0 ~/Git/k8scamp/Kyverno (master)$ cd ..
+root@christoph0 ~/Git/k8scamp (master)$ cd nginx/
+root@christoph0 ~/Git/k8scamp/nginx (master)$ kubectl apply -f service2.yaml
+Error from server: error when creating "service2.yaml": admission webhook "validate.kyverno.svc" denied the request:
+
+resource Service/nginx/nginx-nodeport-service was blocked due to the following policies
+
+check-node-port:
+  check-node-port: 'validation error: NodePort type is not allowed. Rule check-node-port
+    failed at path /spec/type/'
+```
+
+Man kann die Policy auch als Cluster-Policy anlegen, dann hat man aber Seiteneffekte (einige Sachen gehen nicht mehr).
