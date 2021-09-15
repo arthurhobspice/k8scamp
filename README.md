@@ -477,3 +477,43 @@ Hang tight while we grab the latest from your chart repositories...
 ...Successfully got an update from the "stable" chart repository
 Update Complete. ⎈Happy Helming!⎈
 ```
+
+# ArgoCD
+
+"GitOps im Cluster"
+
+Installieren gemäß Slides. Auf PC Port Forwarding aktivieren (wir bauen keinen Ingress):
+
+```
+Christoph.Bauer@E0423066 MINGW64 ~/.kube
+$ kubectl cluster-info
+Kubernetes master is running at https://95.216.142.146:6443
+CoreDNS is running at https://95.216.142.146:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+
+Christoph.Bauer@E0423066 MINGW64 ~/.kube
+$ kubectl -n argocd port-forward  svc/argocd-server 8080:80
+Forwarding from 127.0.0.1:8080 -> 8080
+Forwarding from [::1]:8080 -> 8080
+```
+
+Erstes Beispiel: gitlab.yaml, hole von GitLab und rolle auf eigenem Cluster (https://kubernetes.default.svc) aus.
+
+```
+root@christoph0 ~/Git/k8scamp/ArgoCD (master)$ k apply -f gitlab.yaml
+application.argoproj.io/firstgit created
+```
+
+Update der deployment.yaml auf GitLab => nach spätestens drei Minuten rollt ArgoCD die Änderungen automatisch aus.
+ArgoCD macht kubectl apply auf das GitLab-Verzeichnis (alle yaml, die darin gefunden werden).
+
+Deployment löschen => ArgoCD stellt es sofort wieder her.
+
+Helm-Beispiel: tomcat-helm.yml. Dieses Beispiel "pinnt" die Revision. Man könnte auch auf Target Rev. "latest" gehen.
+
+Vorteil von ArgoCD: Management von Deployments in vielen Clustern ist wesentlich einfacher.
+Nachteil: obwohl wir ein Helm Chart verwenden, sind einige Features von Helm nicht anwendbar (Debuggen, Hooks, ...), weil das Chart
+nicht "in unserem Helm Scope ist". Daher geht Erkan jetzt weg von ArgoCD zu Flux.
+
+Empfehlung: keine ArgoCD-Hooks bauen, weil man sich zu viele Abhängigkeiten von ArgoCD schafft.
