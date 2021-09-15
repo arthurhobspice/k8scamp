@@ -336,6 +336,8 @@ root@christoph0 ~/Git/k8scamp/Helm (master)$ helm template RELEASENAME ./templat
 
 (helm template: lokales Rendern von Templates)
 
+Experimental: Harbor Charts als Docker Images
+
 # Eviction
 
 Linux hat einen OOM-Killer, der Prozesse wegschießt, wenn Speicher knapp wird. Der folgt einer eigenen Logik.
@@ -345,3 +347,133 @@ Wir würden das aber gerne über K8s kontrollieren (kubelet), müssen damit aber
 Siehe ResourceQuota, LimitRange
 
 Eviction findet aufgrund von RAM oder Disk statt, nicht aufgrund von CPU (wird nur sehr langsam).
+
+# Harbor
+
+Docker Registry mit Security Scanner (Trivy, braucht i.Ggs. zu z.B. Qualys keine DB), Notary (Images zertifizieren).
+
+Ohne Zertifikate ist Harbor nichts wert.
+
+```
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ k apply -f traefik-ds-http.yaml
+clusterrole.rbac.authorization.k8s.io/traefik-ingress-controller-clusterrole created
+clusterrolebinding.rbac.authorization.k8s.io/traefik-ingress-controller-binding created
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ cp -r ../../k8sworkshop/CertManager/ .
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ cd CertManager/
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ helm repo add jetstack https://charts.jetstack.io
+"jetstack" has been added to your repositories
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ helm repo update
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "jetstack" chart repository
+...Successfully got an update from the "stable" chart repository
+Update Complete. ⎈Happy Helming!⎈
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ helm install \
+>    cert-manager jetstack/cert-manager \
+>      --namespace cert-manager \
+>        --create-namespace \
+>          --version v1.5.3 \
+>             --set installCRDs=true
+
+NAME: cert-manager
+LAST DEPLOYED: Wed Sep 15 14:21:58 2021
+NAMESPACE: cert-manager
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+cert-manager v1.5.3 has been deployed successfully!
+
+In order to begin issuing certificates, you will need to set up a ClusterIssuer
+or Issuer resource (for example, by creating a 'letsencrypt-staging' issuer).
+
+More information on the different types of issuers and how to configure them
+can be found in our documentation:
+
+https://cert-manager.io/docs/configuration/
+
+For information on how to configure cert-manager to automatically provision
+Certificates for Ingress resources, take a look at the `ingress-shim`
+documentation:
+
+https://cert-manager.io/docs/usage/ingress/
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ helm list -n cert-manager
+NAME            NAMESPACE       REVISION        UPDATED                                         STATUS          CHART                   APP VERSION
+cert-manager    cert-manager    1               2021-09-15 14:21:58.359732797 +0200 CEST        deployed        cert-manager-v1.5.3     v1.5.3
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ k apply -f clusterissuerLEStaging.yaml
+clusterissuer.cert-manager.io/le-clusterissuer-staging created
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ k apply -f clusterissuerLEprod.yaml
+clusterissuer.cert-manager.io/le-clusterissuer-prod created
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ mv harbor.erkan.zwerk.org-staging.yaml harbor.christoph.zwerk.org-staging.yaml
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ vi harbor.christoph.zwerk.org-staging.yaml
+(DNS anpassen...)
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ mv notary.erkan.zwerk.org-staging.yaml notary.christoph.zwerk.org-staging.yaml
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ vi notary.christoph.zwerk.org-staging.yaml
+(DNS anpassen...)
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ k apply -f harbor.christoph.zwerk.org-staging.yaml
+certificate.cert-manager.io/harbor-tls-prod created
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ k apply -f notary.christoph.zwerk.org-staging.yaml
+certificate.cert-manager.io/notary-tls-staging created
+(Das gleiche nochmal für prod...)
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ k get cert
+NAME                 READY   SECRET                           AGE
+harbor-tls-prod      True    harborchristophzwerkorgprod      2m32s
+harbor-tls-staging   True    harborchristophzwerkorgstaging   2m51s
+notary-tls-prod      True    notarychristophzwerkorgprod      2m24s
+notary-tls-staging   True    notarychristophzwerkorgstaging   5s
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ helm repo add harbor https://helm.goharbor.io
+"harbor" has been added to your repositories
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ helm repo update
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "harbor" chart repository
+...Successfully got an update from the "jetstack" chart repository
+...Successfully got an update from the "stable" chart repository
+Update Complete. ⎈Happy Helming!⎈
+root@christoph0 ~/Git/k8scamp/Harbor/CertManager (master)$ cd ..
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ cp ~/Git/k8sworkshop/Harbor/values.yaml .
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ vi values.yaml
+(erkan durch christoph ersetzen)
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ helm upgrade --install -f values.yaml harbor harbor/harbor
+Release "harbor" does not exist. Installing it now.
+NAME: harbor
+LAST DEPLOYED: Wed Sep 15 14:45:09 2021
+NAMESPACE: default
+STATUS: deployed
+REVISION: 1
+TEST SUITE: None
+NOTES:
+Please wait for several minutes for Harbor deployment to complete.
+Then you should be able to visit the Harbor portal at https://harbor.christoph.zwerk.org
+For more details, please visit https://github.com/goharbor/harbor
+```
+
+Zertifikate und Harbor sind jetzt im default namespace, könnte man verbessern...
+
+Traefik hatten wir installiert, weil wir ohne Zertifikat ein Zertifikat nur über HTTP holen können.
+Jetzt tauschen wir aus:
+```
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ k delete -f traefik-ds-http.yaml
+clusterrole.rbac.authorization.k8s.io "traefik-ingress-controller-clusterrole" deleted
+clusterrolebinding.rbac.authorization.k8s.io "traefik-ingress-controller-binding" deleted
+serviceaccount "traefik-ingress-controller" deleted
+daemonset.apps "traefik-ingress-controller" deleted
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ k apply -f traefik-ds.yaml
+clusterrole.rbac.authorization.k8s.io/traefik-ingress-controller-clusterrole created
+clusterrolebinding.rbac.authorization.k8s.io/traefik-ingress-controller-binding created
+serviceaccount/traefik-ingress-controller created
+daemonset.apps/traefik-ingress-controller created
+```
+
+Jetzt ist Harbor erreichbar unter https://harbor.christoph.zwerk.org/.
+
+```
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ helm repo add --username admin --password dontshow mycharts https://harbor.christoph.zwerk.org/chartrepo/arthurhobspice
+"mycharts" has been added to your repositories
+root@christoph0 ~/Git/k8scamp/Harbor (master)$ helm repo update
+Hang tight while we grab the latest from your chart repositories...
+...Successfully got an update from the "mycharts" chart repository
+...Successfully got an update from the "jetstack" chart repository
+...Successfully got an update from the "harbor" chart repository
+...Successfully got an update from the "stable" chart repository
+Update Complete. ⎈Happy Helming!⎈
+```
