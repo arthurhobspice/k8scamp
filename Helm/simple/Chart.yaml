@@ -1,0 +1,15 @@
+apiVersion: v2
+name: simple
+
+#Chartversion
+version: "0.1.0"
+#Version der App 
+appVersion: "3.4"
+description: Erstes Helm3 Chart
+# Wir machen nur Application
+type: application
+sources:
+- https://hier.die/doku
+- https://helm.sh/docs/topics/charts/
+
+#

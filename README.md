@@ -10,6 +10,24 @@ https://linsenraum.de/KubernetesCamp/
 
 Beispieldateien aus github.com/erkules/k8sworkshop, teilweise hier reinkopiert.
 
+Slides gibt's auch offline als Docker Image: docker pull erkules/kubernetescamp
+
+# Die Basics
+
+Vier zentrale Komponenten auf dem Master Node (christoph0): etcd, Controller, Scheduler, API Server.
+Sind alle static pods, Definition in /etc/kubernetes/manifests.
+kubelet sorgt dafür, dass die Pods laufen. Test: verschiebe Manifest nach /tmp => Pod weg, hole
+Manifest zurück => Pod wieder da.
+etcd persistiert seine Daten auf Disk, hält den Zustand des Clusters.
+
+Alle Kommunikation läuft über den API Server.
+
+Host Port: Eigenschaft eines Pods, analog zu Docker-Portmapping. Unter welchem Port ist der Pod erreichbar,
+(nur) dort wo er läuft. Architektonisch will man i.d.R. keine Host Ports haben.
+
+Node Port: Eigenschaft eines Services, wird auf jedem Node angelegt und vom
+kube-proxy verwaltet, egal ob dahinter ein Pod läuft.
+
 # Pod Priority
 
 Wichtigere Pods haben eine höhere Nummer. Die absolute Höhe ist egal, es geht nur ums Verhältnis.
@@ -252,7 +270,7 @@ nicht gemacht).
 Weitere Beispiele zeigen: man kann mit Kyverno eine Menge machen, was man auch mit ArgoCD oder Flux machen könnte.
 Man sollte Scopes festlegen, wer macht was, wenn man alles im Einsatz hat, sonst schwer zu debuggen!
 
-# Pod Disruption Budget
+# Pod Disruption Budgets
 
 PDB legen fest, wie viele Pods laufen müssen (max. nicht verfügbar sein dürfen). Relevant z.B. bei Node Draining, Quorum-basierten
 Clusterdiensten.
@@ -279,4 +297,51 @@ pod/calico-apiserver-554fbf9554-255nm evicted
 root@christoph0 ~/Git/k8scamp/PDB (master)$
 ```
 
-PDB verhindert den Drain: drei Pods müssen immer laufen.
+PDB verhindert den Drain: drei Pods müssen immer laufen. Fix: minAvailable auf 2 setzen, nochmal kubectl drain...
+
+# Helm
+
+Komplexe Deployments mit Templates und Values
+
+helm upgrade --install ist idempotent, helm install nicht (Fehlermeldung, wenn's schon da ist).
+
+Verschiedene Stages, zum Beispiel: values.yaml kommt mit dem Chart, mit Defaultwerten. Mit helm show values
+exportieren, anpassen, je Stage mit -f ... wieder reinschießen.
+
+k8scamp/Helm/simple -> einfachstes Beispiel für eine Helm-Chart-Struktur
+
+Basisstruktur wird mit create schon vorgegeben:
+
+```
+root@christoph0 ~/Git/k8scamp/Helm (master)$ helm create created
+Creating created
+root@christoph0 ~/Git/k8scamp/Helm (master)$ helm package ./created
+Successfully packaged chart and saved it to: /root/Git/k8scamp/Helm/created-0.1.0.tgz
+root@christoph0 ~/Git/k8scamp/Helm (master)$ vi created/Chart.yaml
+(Version hochzählen...)
+root@christoph0 ~/Git/k8scamp/Helm (master)$ helm package ./created
+Successfully packaged chart and saved it to: /root/Git/k8scamp/Helm/created-0.1.1.tgz
+```
+
+Prüfen vor dem Ausrollen:
+```
+root@christoph0 ~/Git/k8scamp/Helm (master)$ helm lint simple/
+==> Linting simple/
+[ERROR] Chart.yaml: appVersion should be of type string but it's of type float64
+[INFO] Chart.yaml: icon is recommended
+
+Error: 1 chart(s) linted, 1 chart(s) failed
+root@christoph0 ~/Git/k8scamp/Helm (master)$ helm template RELEASENAME ./templateexample/
+```
+
+(helm template: lokales Rendern von Templates)
+
+# Eviction
+
+Linux hat einen OOM-Killer, der Prozesse wegschießt, wenn Speicher knapp wird. Der folgt einer eigenen Logik.
+Wir würden das aber gerne über K8s kontrollieren (kubelet), müssen damit aber dem OOM-Killer zuvorkommen
+-> Resource Quotas. Sind RQ im Namespace gesetzt, müssen die Pods Anforderungen mitbringen.
+
+Siehe ResourceQuota, LimitRange
+
+Eviction findet aufgrund von RAM oder Disk statt, nicht aufgrund von CPU (wird nur sehr langsam).
