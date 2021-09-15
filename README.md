@@ -1,8 +1,10 @@
 # k8scamp
 
 Kubernetes Camp Advanced München 14.-16.9.2021
+Trainer Erkan Yanar
 
 https://zwerk.org/hedgedoc/k8s202109#
+https://linsenraum.de/KubernetesCamp/
 
 Beispieldateien aus github.com/erkules/k8sworkshop, teilweise hier reinkopiert.
 
