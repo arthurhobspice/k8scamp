@@ -1,0 +1,100 @@
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "morecomplex.fullname" . }}-pre-install
+  labels:
+{{ include "morecomplex.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install
+spec:
+  template:
+    spec:
+      containers:
+        - name: wget
+          image: erkules/kubectl:v1.16.2
+          command: 
+          - sh
+          - -c 
+          - " echo pre-install && sleep 10 "
+      restartPolicy: Never
+  backoffLimit: 4
+
+
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "morecomplex.fullname" . }}-post-install
+  labels:
+{{ include "morecomplex.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install
+spec:
+  template:
+    spec:
+      containers:
+        - name: wget
+          image: erkules/kubectl:v1.16.2
+          command: 
+          - sh
+          - -c 
+          - " echo post-install && sleep 10 "
+      restartPolicy: Never
+  backoffLimit: 4
+
+
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "morecomplex.fullname" . }}-pre-delete
+  labels:
+{{ include "morecomplex.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-delete
+spec:
+  template:
+    spec:
+      containers:
+        - name: wget
+          image: erkules/kubectl:v1.16.2
+          command: 
+          - sh
+          - -c 
+          - " echo pre-delete && sleep 10 "
+      restartPolicy: Never
+  backoffLimit: 4
+
+
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "morecomplex.fullname" . }}-post-delete
+  labels:
+{{ include "morecomplex.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-delete
+spec:
+  template:
+    spec:
+      containers:
+        - name: wget
+          image: erkules/kubectl:v1.16.2
+          command: 
+          - sh
+          - -c 
+          - " echo post-delete && sleep 10 "
+      restartPolicy: Never
+  backoffLimit: 4
+
+
+
+
+
+
