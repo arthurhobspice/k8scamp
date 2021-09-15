@@ -1,9 +1,11 @@
 # k8scamp
 
 Kubernetes Camp Advanced München 14.-16.9.2021
+
 Trainer Erkan Yanar
 
 https://zwerk.org/hedgedoc/k8s202109#
+
 https://linsenraum.de/KubernetesCamp/
 
 Beispieldateien aus github.com/erkules/k8sworkshop, teilweise hier reinkopiert.
@@ -249,3 +251,32 @@ nicht gemacht).
 
 Weitere Beispiele zeigen: man kann mit Kyverno eine Menge machen, was man auch mit ArgoCD oder Flux machen könnte.
 Man sollte Scopes festlegen, wer macht was, wenn man alles im Einsatz hat, sonst schwer zu debuggen!
+
+# Pod Disruption Budget
+
+PDB legen fest, wie viele Pods laufen müssen (max. nicht verfügbar sein dürfen). Relevant z.B. bei Node Draining, Quorum-basierten
+Clusterdiensten.
+
+```
+root@christoph0 ~/Git/k8scamp/PDB (master)$ k apply -f simple-deployment-pdb.yaml -n pdb
+poddisruptionbudget.policy/simplests-pdb created
+deployment.apps/wwwanti created
+root@christoph0 ~/Git/k8scamp/PDB (master)$ k drain christoph3 --ignore-daemonsets --delete-emptydir-data --force
+node/christoph3 cordoned
+WARNING: ignoring DaemonSet-managed Pods: calico-system/calico-node-mkczk, kube-system/kube-proxy-hq5kl
+evicting pod pdb/wwwanti-5f45bbd9c8-g57z4
+evicting pod calico-apiserver/calico-apiserver-554fbf9554-255nm
+evicting pod kyverno/kyverno-7b7f89c6f7-cqcfs
+error when evicting pods/"wwwanti-5f45bbd9c8-g57z4" -n "pdb" (will retry after 5s): Cannot evict pod as it would violate the pod's disruption budget.
+evicting pod pdb/wwwanti-5f45bbd9c8-g57z4
+error when evicting pods/"wwwanti-5f45bbd9c8-g57z4" -n "pdb" (will retry after 5s): Cannot evict pod as it would violate the pod's disruption budget.
+evicting pod pdb/wwwanti-5f45bbd9c8-g57z4
+error when evicting pods/"wwwanti-5f45bbd9c8-g57z4" -n "pdb" (will retry after 5s): Cannot evict pod as it would violate the pod's disruption budget.
+evicting pod pdb/wwwanti-5f45bbd9c8-g57z4
+error when evicting pods/"wwwanti-5f45bbd9c8-g57z4" -n "pdb" (will retry after 5s): Cannot evict pod as it would violate the pod's disruption budget.
+pod/calico-apiserver-554fbf9554-255nm evicted
+^C
+root@christoph0 ~/Git/k8scamp/PDB (master)$
+```
+
+PDB verhindert den Drain: drei Pods müssen immer laufen.
