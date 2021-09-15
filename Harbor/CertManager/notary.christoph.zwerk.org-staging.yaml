@@ -1,0 +1,11 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: notary-tls-staging
+spec:
+  secretName: notarychristophzwerkorgstaging
+  dnsNames:
+  - "notary.christoph.zwerk.org"
+  issuerRef:
+    name: le-clusterissuer-staging
+    kind: ClusterIssuer
