@@ -1,0 +1,20 @@
+# permissions for end users to view mytomcats.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mytomcat-viewer-role
+rules:
+- apiGroups:
+  - demo.my.domain
+  resources:
+  - mytomcats
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - demo.my.domain
+  resources:
+  - mytomcats/status
+  verbs:
+  - get
