@@ -1,0 +1,6 @@
+# Use the 'create api' subcommand to add watches to this file.
+- group: demo.my.domain
+  version: v1alpha1
+  kind: Mytomcat
+  chart: helm-charts/tomcat
+#+kubebuilder:scaffold:watch

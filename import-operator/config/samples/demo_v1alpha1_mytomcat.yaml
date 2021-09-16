@@ -1,0 +1,53 @@
+apiVersion: demo.my.domain/v1alpha1
+kind: Mytomcat
+metadata:
+  name: mytomcat-sample
+spec:
+  # Default values copied from <project_dir>/helm-charts/tomcat/values.yaml
+  affinity: {}
+  deploy:
+    directory: /usr/local/tomcat/webapps
+  env: []
+  extraInitContainers: []
+  extraVolumeMounts: []
+  extraVolumes: []
+  hostPort: 8009
+  image:
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+    tomcat:
+      repository: tomcat
+      tag: "7.0"
+    webarchive:
+      repository: ananwaresystems/webarchive
+      tag: "1.0"
+  ingress:
+    annotations: {}
+    enabled: false
+    hosts:
+    - chart-example.local
+    path: /
+    tls: []
+  livenessProbe:
+    failureThreshold: 6
+    initialDelaySeconds: 60
+    path: /sample
+    periodSeconds: 30
+    timeoutSeconds: 5
+  nodeSelector: {}
+  readinessProbe:
+    failureThreshold: 6
+    initialDelaySeconds: 60
+    path: /sample
+    periodSeconds: 30
+    timeoutSeconds: 5
+  replicaCount: 3
+  resources: {}
+  service:
+    externalPort: 80
+    internalPort: 8080
+    name: http
+    type: NodePort
+  tolerations: []
+  
+  

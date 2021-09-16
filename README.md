@@ -612,3 +612,63 @@ root@christoph0 ~/Git/k8scamp/OperatorCRD (master)$ kubectl exec -it controller 
 
 (Skript noch händisch starten.) Jetzt zwei andere Terminalfenster öffnen, in einem "watch kubectl get pods" und im anderen
 Pods mit guten und doofen Namen starten. Pods mit doofen Namen werden sofort wieder terminiert.
+
+Operator bauen mit importiertem Helm (deklaratives Management von Helm Chart Releases):
+
+```
+root@christoph0 ~/Git/k8scamp (master)$ mkdir import-operator && cd import-operator
+root@christoph0 ~/Git/k8scamp/import-operator (master)$ operator-sdk init --plugins helm
+Writing kustomize manifests for you to edit...
+Next: define a resource with:
+$ operator-sdk create api
+root@christoph0 ~/Git/k8scamp/import-operator (master)$ operator-sdk create api --group demo --version v1alpha1 --kind Mytomcat --helm-chart stable/tomcat
+Writing kustomize manifests for you to edit...
+Created helm-charts/tomcat
+Generating RBAC rules
+WARN[0003] The RBAC rules generated in config/rbac/role.yaml are based on the chart's default manifest. Some rules may be missing for resources that are only enabled with custom values, and some existing rules may be overly broad. Double check the rules generated in config/rbac/role.yaml to ensure they meet the operator's permission requirements.
+root@christoph0 ~/Git/k8scamp/import-operator (master)$ ll
+total 40
+drwxr-xr-x  4 root root 4096 Sep 16 14:14 ./
+drwxr-xr-x 15 root root 4096 Sep 16 14:11 ../
+drwx------ 10 root root 4096 Sep 16 14:14 config/
+-rw-r--r--  1 root root  193 Sep 16 14:14 Dockerfile
+-rw-r--r--  1 root root  126 Sep 16 14:14 .gitignore
+drwxr-xr-x  3 root root 4096 Sep 16 14:14 helm-charts/
+-rw-r--r--  1 root root 7584 Sep 16 14:14 Makefile
+-rw-------  1 root root  329 Sep 16 14:14 PROJECT
+-rw-r--r--  1 root root  181 Sep 16 14:14 watches.yaml
+root@christoph0 ~/Git/k8scamp/import-operator (master)$ vi config/samples/demo_v1alpha1_mytomcat.yaml
+(LoadBalancer durch NodePort ersetzen...)
+root@christoph0 ~/Git/k8scamp/import-operator (master)$ make install run
+/root/Git/k8scamp/import-operator/bin/kustomize build config/crd | kubectl apply -f -
+customresourcedefinition.apiextensions.k8s.io/mytomcats.demo.my.domain created
+/root/Git/k8scamp/import-operator/bin/helm-operator run
+{"level":"info","ts":1631794714.0567715,"logger":"cmd","msg":"Version","Go Version":"go1.16.4","GOOS":"linux","GOARCH":"amd64","helm-operator":"v1.7.1+git","commit":"d3bd87c6900f70b7df618340e1d63329c7cd651e"}
+{"level":"info","ts":1631794714.0606704,"logger":"cmd","msg":"Watch namespaces not configured by environment variable WATCH_NAMESPACE or file. Watching all namespaces.","Namespace":""}
+{"level":"info","ts":1631794714.8210015,"logger":"controller-runtime.metrics","msg":"metrics server is starting to listen","addr":":8080"}
+{"level":"info","ts":1631794714.8222928,"logger":"helm.controller","msg":"Watching resource","apiVersion":"demo.my.domain/v1alpha1","kind":"Mytomcat","namespace":"","reconcilePeriod":"1m0s"}
+{"level":"info","ts":1631794714.8230028,"logger":"controller-runtime.manager","msg":"starting metrics server","path":"/metrics"}
+{"level":"info","ts":1631794714.823126,"logger":"controller-runtime.manager.controller.mytomcat-controller","msg":"Starting EventSource","source":"kind source: demo.my.domain/v1alpha1, Kind=Mytomcat"}
+{"level":"info","ts":1631794714.9237378,"logger":"controller-runtime.manager.controller.mytomcat-controller","msg":"Starting Controller"}
+{"level":"info","ts":1631794714.9238126,"logger":"controller-runtime.manager.controller.mytomcat-controller","msg":"Starting workers","worker count":2}
+```
+
+Operator wartet auf Ausrollen eines Objektes vom Typ Mytomcat, also in anderem Terminal:
+
+```
+root@christoph0 ~/Git/k8scamp/import-operator/config/samples (master)$ k apply -f demo_v1alpha1_mytomcat.yaml
+mytomcat.demo.my.domain/mytomcat-sample created
+root@christoph0 ~/Git/k8scamp/import-operator/config/samples (master)$ helm ls
+NAME            NAMESPACE       REVISION        UPDATED                                         STATUS          CHART           APP VERSION
+harbor          default         1               2021-09-15 14:45:09.571163789 +0200 CEST        deployed        harbor-1.7.2    2.3.2
+mytomcat-sample default         6               2021-09-16 14:57:11.343225775 +0200 CEST        deployed        tomcat-0.4.3    7.0
+(Z.B. Anzahl Replicas in demo_v1alpha1_mytomcat.yaml anpassen...)
+root@christoph0 ~/Git/k8scamp/import-operator/config/samples (master)$ kubectl apply -f demo_v1alpha1_mytomcat.yaml
+mytomcat.demo.my.domain/mytomcat-sample configured
+root@christoph0 ~/Git/k8scamp/import-operator/config/samples (master)$ helm ls
+NAME            NAMESPACE       REVISION        UPDATED                                         STATUS          CHART           APP VERSION
+harbor          default         1               2021-09-15 14:45:09.571163789 +0200 CEST        deployed        harbor-1.7.2    2.3.2
+mytomcat-sample default         22              2021-09-16 15:10:32.810465711 +0200 CEST        deployed        tomcat-0.4.3    7.0
+```
+
+(Offener Punkt: jede Minute wird eine neue Revision angelegt - warum? Sollte nicht sein.)
