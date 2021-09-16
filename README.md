@@ -514,6 +514,101 @@ Helm-Beispiel: tomcat-helm.yml. Dieses Beispiel "pinnt" die Revision. Man könnt
 
 Vorteil von ArgoCD: Management von Deployments in vielen Clustern ist wesentlich einfacher.
 Nachteil: obwohl wir ein Helm Chart verwenden, sind einige Features von Helm nicht anwendbar (Debuggen, Hooks, ...), weil das Chart
-nicht "in unserem Helm Scope ist". Daher geht Erkan jetzt weg von ArgoCD zu Flux.
+nicht "in unserem Helm Scope ist" (mit helm ls nicht zu sehen). Daher geht Erkan jetzt weg von ArgoCD zu Flux.
 
 Empfehlung: keine ArgoCD-Hooks bauen, weil man sich zu viele Abhängigkeiten von ArgoCD schafft.
+
+# Controller und Operatoren
+
+Manche Leute unterscheiden zwischen Controllern und Operatoren. Sind aber konzeptionell ähnlich.
+In der Regel wird der Unterschied daran festgemacht, dass Operatoren eigens entworfene CRDs verwenden.
+Zwei Möglichkeiten, mit K8s-Objekten zu interagieren: Hooks oder Operatoren, die im Cluster laufen.
+
+Operatoren haben über RBAC bestimmte Rechte. Man hängt Operatoren an Watch-Events oder lässt sie regelmäßig pullen.
+
+Vorsicht: mit obskuren Operatoren, u.U. sogar ohne ein Framework entwickelt, kann man die Produktion
+stilllegen. Schwer zu debuggen. Beispiel: Entwickler schreibt einen Operator, der bei Anforderung von Limits
+jedem Pod automatisch Werte mitgibt.
+
+Compliance Policies lieber mit Kyverno o.ä. umsetzen.
+
+```
+root@christoph0 ~/Git/k8sworkshop (master)$ kubectl explain validatingwebhookconfiguration [--recursive]
+root@christoph0 ~/Git/k8sworkshop (master)$ cd ../k8scamp/Controller
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl apply -f webhookregistration.yaml
+validatingwebhookconfiguration.admissionregistration.k8s.io/webhook-check-example created
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl get ValidatingWebhookConfiguration
+NAME                    WEBHOOKS   AGE
+cert-manager-webhook    1          19h
+webhook-check-example   1          23s
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl create ns loeschen
+namespace/loeschen created
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl label ns loeschen k8scamp=spielen
+namespace/loeschen labeled
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl apply -f pod.yaml -n loeschen
+pod/www created
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl delete -f pod.yaml -n loeschen
+Error from server (InternalError): error when deleting "pod.yaml": Internal error occurred: failed calling webhook "webhook-check-example.linsenraum.de": Post "https://check.webhook.svc:443/?timeout=5s": service "check" not found
+```
+
+Pod aus pod.yaml lässt sich nur löschen, wenn wir in der webhookregistration.yaml "Ignore" setzen.
+
+Check definieren: webhook-deployment.yaml. Der Einfachheit halber ein Shellskript, das eine Antwort zusammenbaut.
+Ausgabe nach STDERR: damit wir Ausgaben in kubectl get logs finden. Im Webhook-Image ist das Zertifikat versteckt,
+damit wir uns damit jetzt nicht beschäftigen müssen.
+
+```
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl apply -f webhook-deployment.yaml
+namespace/webhook created
+configmap/checkscript created
+deployment.apps/webhookscript created
+service/check created
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl apply -f pod.yaml -n loeschen
+pod/www created
+root@christoph0 ~/Git/k8scamp/Controller (master)$ kubectl delete -f pod.yaml -n loeschen
+Error from server: error when deleting "pod.yaml": admission webhook "webhook-check-example.linsenraum.de" denied the request: du nicht
+```
+
+Eine Ressource gemäß einer eigenen CRDs, auf die kein Operator reagiert, ist einfach ein Objekt im etcd.
+
+Zur Vorbereitung ein bisschen RBAC: Pods laufen unter Serviceaccounts:
+
+```
+root@christoph0 ~/Git/k8scamp/OperatorCRD (master)$ kubectl exec -it tomcat-764d455f-tmnt2 -- sh
+Defaulted container "tomcat" out of: tomcat, war (init)
+# cd /run/secrets/kubernetes.io/serviceaccount
+# ls
+ca.crt  namespace  token
+# TOKEN=$(cat token)
+# cat namespace
+# curl --cacert ca.crt -H "Authorization: Bearer $TOKEN" https://kubernetes.default
+{
+  "kind": "Status",
+  "apiVersion": "v1",
+  "metadata": {
+
+  },
+  "status": "Failure",
+  "message": "forbidden: User \"system:serviceaccount:default:default\" cannot get path \"/\"",
+  "reason": "Forbidden",
+  "details": {
+
+  },
+  "code": 403
+}#
+```
+
+Klar, default hat keine Rechte im API-Server. Token dekodieren: https://jwt.io/
+
+Wír bauen uns einen Operator, der Pods mit doofen Namen terminiert. Über role binding bekommt
+der Pod Adminrechte im Cluster.
+
+```
+root@christoph0 ~/Git/k8scamp/OperatorCRD (master)$ kubectl apply -f mycontroller.yaml
+root@christoph0 ~/Git/k8scamp/OperatorCRD (master)$ kubectl exec -it controller -- sh
+# cd /srv
+# sh script.sh
+```
+
+(Skript noch händisch starten.) Jetzt zwei andere Terminalfenster öffnen, in einem "watch kubectl get pods" und im anderen
+Pods mit guten und doofen Namen starten. Pods mit doofen Namen werden sofort wieder terminiert.
